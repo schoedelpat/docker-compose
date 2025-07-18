@@ -32,6 +32,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/image/build"
 	"github.com/docker/compose/v2/pkg/api"
+	progress2 "github.com/docker/compose/v2/pkg/progress"
 	buildtypes "github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/registry"
@@ -41,10 +42,85 @@ import (
 	"github.com/docker/docker/pkg/streamformatter"
 	"github.com/moby/go-archive"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
+func (s *composeService) doBuildClassic(ctx context.Context, project *types.Project, serviceToBuild types.Services, options api.BuildOptions) (map[string]string, error) {
+	imageIDs := map[string]string{}
+
+	// Not using bake, additional_context: service:xx is implemented by building images in dependency order
+	project, err := project.WithServicesTransform(func(serviceName string, service types.ServiceConfig) (types.ServiceConfig, error) {
+		if service.Build != nil {
+			for _, c := range service.Build.AdditionalContexts {
+				if t, found := strings.CutPrefix(c, types.ServicePrefix); found {
+					if service.DependsOn == nil {
+						service.DependsOn = map[string]types.ServiceDependency{}
+					}
+					service.DependsOn[t] = types.ServiceDependency{
+						Condition: "build", // non-canonical, but will force dependency graph ordering
+					}
+				}
+			}
+		}
+		return service, nil
+	})
+	if err != nil {
+		return imageIDs, err
+	}
+
+	// we use a pre-allocated []string to collect build digest by service index while running concurrent goroutines
+	builtDigests := make([]string, len(project.Services))
+	names := project.ServiceNames()
+	getServiceIndex := func(name string) int {
+		for idx, n := range names {
+			if n == name {
+				return idx
+			}
+		}
+		return -1
+	}
+
+	cw := progress2.ContextWriter(ctx)
+	err = InDependencyOrder(ctx, project, func(ctx context.Context, name string) error {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.String("builder", "classic"))
+		service, ok := serviceToBuild[name]
+		if !ok {
+			return nil
+		}
+
+		image := api.GetImageNameOrDefault(service, project.Name)
+		cw.Event(progress2.BuildingEvent(image))
+		id, err := s.doBuildImage(ctx, project, service, options)
+		if err != nil {
+			return err
+		}
+		cw.Event(progress2.BuiltEvent(image))
+		builtDigests[getServiceIndex(name)] = id
+
+		if options.Push {
+			return s.push(ctx, project, api.PushOptions{})
+		}
+		return nil
+	}, func(traversal *graphTraversal) {
+		traversal.maxConcurrency = s.maxConcurrency
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for i, imageDigest := range builtDigests {
+		if imageDigest != "" {
+			service := project.Services[names[i]]
+			imageRef := api.GetImageNameOrDefault(service, project.Name)
+			imageIDs[imageRef] = imageDigest
+		}
+	}
+	return imageIDs, err
+}
+
 //nolint:gocyclo
-func (s *composeService) doBuildClassic(ctx context.Context, project *types.Project, service types.ServiceConfig, options api.BuildOptions) (string, error) {
+func (s *composeService) doBuildImage(ctx context.Context, project *types.Project, service types.ServiceConfig, options api.BuildOptions) (string, error) {
 	var (
 		buildCtx      io.ReadCloser
 		dockerfileCtx io.ReadCloser

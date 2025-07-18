@@ -30,7 +30,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/types"
@@ -49,31 +48,19 @@ import (
 )
 
 func buildWithBake(dockerCli command.Cli) (bool, error) {
-	b, ok := os.LookupEnv("COMPOSE_BAKE")
-	if !ok {
-		b = "true"
-	}
-	bake, err := strconv.ParseBool(b)
-	if err != nil {
-		return false, err
-	}
-	if !bake {
-		return false, nil
-	}
-
 	enabled, err := dockerCli.BuildKitEnabled()
 	if err != nil {
 		return false, err
 	}
+
 	if !enabled {
-		logrus.Warnf("Docker Compose is configured to build using Bake, but buildkit isn't enabled")
 		return false, nil
 	}
 
 	_, err = manager.GetPlugin("buildx", dockerCli, &cobra.Command{})
 	if err != nil {
 		if manager.IsNotFound(err) {
-			logrus.Warnf("Docker Compose is configured to build using Bake, but buildx isn't installed")
+			logrus.Warnf("Docker Compose requires buildx plugin to be installed")
 			return false, nil
 		}
 		return false, err
