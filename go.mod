@@ -2,6 +2,10 @@ module github.com/docker/compose/v2
 
 go 1.24.7
 
+replace github.com/docker/buildx => github.com/thaJeztah/buildx v0.2.1-0.20250919175045-1124051cb6e3 // https://github.com/docker/buildx/pull/3326
+
+replace github.com/docker/cli => github.com/thaJeztah/cli v0.0.0-20250919143055-4731d2b0b6fe // https://github.com/docker/cli/pull/6458
+
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/DefangLabs/secret-detector v0.0.0-20250403165618-22662109213e
@@ -15,7 +19,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
 	github.com/docker/buildx v0.28.0
-	github.com/docker/cli v28.4.0+incompatible
+	github.com/docker/cli v28.3.4-0.20250905221807-be97096566f2+incompatible // master
 	github.com/docker/cli-docs-tool v0.10.0
 	github.com/docker/docker v28.4.0+incompatible
 	github.com/docker/go-connections v0.6.0
@@ -30,6 +34,8 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/moby/buildkit v0.24.0
 	github.com/moby/go-archive v0.1.0
+	github.com/moby/moby/api v1.52.0-beta.1.0.20250919095748-0967d6ea6ba7 // master
+	github.com/moby/moby/client v0.1.0-beta.0.0.20250919095748-0967d6ea6ba7 // master
 	github.com/moby/patternmatcher v0.6.0
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/term v0.5.2
@@ -168,7 +174,7 @@ require (
 	github.com/tonistiigi/vt100 v0.0.0-20240514184818-90bafcd6abab // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
-	github.com/zclconf/go-cty v1.16.2 // indirect
+	github.com/zclconf/go-cty v1.17.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.60.0 // indirect
